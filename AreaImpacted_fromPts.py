@@ -28,8 +28,7 @@ arcpy.env.overwriteOutput = True
 # Set variables from parameters from user 
 fe = arcpy.GetParameterAsText(0) # FishingEvents shp
 dist1 = arcpy.GetParameterAsText(1) # Upper bounds of set length
-dist2 = arcpy.GetParameterAsText(2) # Buffer distance for FE
-area_Poly = arcpy.GetParameterAsText(3) # Polygons to calcalate area within
+area_Poly = arcpy.GetParameterAsText(2) # Polygons to calcalate area within
 
 # Get fishery name
 desc = arcpy.Describe(fe)
@@ -37,13 +36,12 @@ fename = desc.baseName
 arcpy.AddMessage(fename)
 
 # Set workspace and declare variables
-arcpy.env.workspace = out_folder_path = arcpy.GetParameterAsText(4)  
+arcpy.env.workspace = out_folder_path = arcpy.GetParameterAsText(3)  
 arcpy.AddMessage(out_folder_path)  
 outLocation = fename+".gdb"
 
 # Local variables:
-#v_Name_Lyr = fename+"_lyr"
-#v_Name_Selected = fename+"_Selected"
+v_Name_Events = fename+"_Events" 
 v_Name_Intersect = fename+"_Intersect"
 v_Name_Buffer = fename+"_Buffer"
 v_Name_Final = fename+"_Final"
@@ -56,35 +54,29 @@ newGDB = out_folder_path +"\\"+ outLocation
 arcpy.AddMessage(newGDB)
 arcpy.env.workspace = newGDB
 
-# Make a layer from the feature class
-#arcpy.MakeFeatureLayer_management(fe,v_Name_Lyr)
-
-## Select all fishing events that are less than upper bound distance *** I can't get this to work correctly, so I did this manually first before running code
-#qry = "\"LENGTH\" <  '" + dist1 + "' 
-#arcpy.AddMessage("Selecting fishing events "+ qry)
-#arcpy.SelectLayerByAttribute_management(v_Name_Lyr, "NEW_SELECTION", qry )
-
-# Write the selected features to a new featureclass
-#arcpy.CopyFeatures_management(v_Name_Lyr, v_Name_Selected)
-
 # Process: Intersect
 arcpy.AddMessage("Intersecting fishing with polygons...")
 inFeatures = [fe,area_Poly]
-arcpy.Intersect_analysis(inFeatures, v_Name_Intersect, "ALL", "", "LINE")
+arcpy.Intersect_analysis(inFeatures, v_Name_Intersect, "ALL", "", "POINT")
 
 # Process: Buffer
 arcpy.AddMessage("Buffering...")
-arcpy.Buffer_analysis(v_Name_Intersect, v_Name_Buffer, dist2, "FULL", "ROUND", "LIST", "Reef")
+arcpy.Buffer_analysis(v_Name_Intersect, v_Name_Buffer, dist1, "FULL", "ROUND", "LIST", "Reef")
 
 # Process: Clip
 arcpy.AddMessage("Clipping...")
 arcpy.Clip_analysis(v_Name_Buffer, area_Poly, v_Name_Final, "")
+
+# Process: Calculate Area
+arcpy.AddField_management(v_Name_Final, "Area_m2", "DOUBLE")
+exp = "!SHAPE.AREA@SQUAREMETERS!"
+arcpy.CalculateField_management(v_Name_Final, "Area_m2", exp, "PYTHON_9.3")
 
 # Process: Export Feature Attribute to ASCII...
 arcpy.AddMessage("Exporting attribute table...")
 arcpy.env.workspace = out_folder_path
 input_features = outLocation+"\\"+v_Name_Final
 export_ASCII = fename+"_Area.csv"
-arcpy.ExportXYv_stats(input_features, ["Reef","Shape_Area"], "COMMA", fename+"_Area.csv", "ADD_FIELD_NAMES")
+arcpy.ExportXYv_stats(input_features, ["Reef","Area_m2"], "COMMA", fename+"_Area.csv", "ADD_FIELD_NAMES")
  
 
